@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const OUTPUT_DIR = resolve(".vercel/output/static");
 const WRANGLER_CONFIG_PATH = resolve("wrangler.json");
 const WRANGLER_EXAMPLE_PATH = resolve("wrangler.example.json");
-const TEMP_WRANGLER_CONFIG_PATH = resolve(".wrangler.pages.generated.json");
+const WRANGLER_BACKUP_PATH = resolve(".wrangler.pages.backup.json");
 
 const PROJECT_NAME =
   process.env.PROJECT_NAME ||
@@ -65,7 +65,7 @@ const createDeployConfig = () => {
       "⚠️ No wrangler.json or wrangler.example.json found. Deploying with project name only."
     );
     return {
-      configPath: null,
+      config: null,
       projectName: PROJECT_NAME,
     };
   }
@@ -122,27 +122,46 @@ const createDeployConfig = () => {
     });
   }
 
-  writeFileSync(TEMP_WRANGLER_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
   return {
-    configPath: TEMP_WRANGLER_CONFIG_PATH,
+    config,
     projectName: config.name,
+  };
+};
+
+const installWranglerConfig = (config) => {
+  if (!config) {
+    return () => {};
+  }
+
+  const hadExistingConfig = existsSync(WRANGLER_CONFIG_PATH);
+
+  if (hadExistingConfig) {
+    writeFileSync(WRANGLER_BACKUP_PATH, readFileSync(WRANGLER_CONFIG_PATH, "utf-8"));
+  }
+
+  writeFileSync(WRANGLER_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
+
+  return () => {
+    if (hadExistingConfig) {
+      writeFileSync(WRANGLER_CONFIG_PATH, readFileSync(WRANGLER_BACKUP_PATH, "utf-8"));
+      rmSync(WRANGLER_BACKUP_PATH, { force: true });
+      return;
+    }
+
+    rmSync(WRANGLER_CONFIG_PATH, { force: true });
   };
 };
 
 const deployPages = () => {
   ensurePagesOutput();
 
-  let generatedConfigPath = null;
+  let restoreWranglerConfig = () => {};
 
   try {
-    const { configPath, projectName } = createDeployConfig();
-    generatedConfigPath = configPath;
+    const { config, projectName } = createDeployConfig();
+    restoreWranglerConfig = installWranglerConfig(config);
 
     const args = ["exec", "wrangler"];
-
-    if (generatedConfigPath) {
-      args.push("--config", generatedConfigPath);
-    }
 
     args.push(
       "pages",
@@ -156,9 +175,7 @@ const deployPages = () => {
 
     run("pnpm", args);
   } finally {
-    if (generatedConfigPath && existsSync(generatedConfigPath)) {
-      rmSync(generatedConfigPath);
-    }
+    restoreWranglerConfig();
   }
 };
 
