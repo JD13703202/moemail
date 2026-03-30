@@ -8,12 +8,12 @@ import { eq } from "drizzle-orm"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { Permission, hasPermission, ROLES, Role } from "./permissions"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { hashPassword, comparePassword } from "@/lib/utils"
 import { authSchema, AuthSchema } from "@/lib/validation"
 import { generateAvatarUrl } from "./avatar"
 import { getUserId } from "./apiKey"
 import { verifyTurnstileToken } from "./turnstile"
 import { getRuntimeEnv } from "./runtime-env"
+import { hashPassword, comparePassword } from "./password"
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.EMPEROR]: "皇帝（网站所有者）",
