@@ -131,9 +131,13 @@
     "role": "角色",
     "actions": "操作",
     "promote": "设为",
+    "delete": "删除账号",
+    "deleteConfirm": "确认删除该用户吗",
     "noUsers": "未找到用户",
     "loading": "加载中...",
     "updateSuccess": "用户角色更新成功",
-    "updateFailed": "更新用户角色失败"
+    "updateFailed": "更新用户角色失败",
+    "deleteSuccess": "用户删除成功",
+    "deleteFailed": "删除用户失败"
   }
 }

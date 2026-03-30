@@ -1,3 +1,5 @@
+import { checkPermission } from "@/lib/auth"
+import { PERMISSIONS } from "@/lib/permissions"
 import { createDb } from "@/lib/db"
 import { users } from "@/lib/schema"
 import { eq } from "drizzle-orm"
@@ -6,6 +8,12 @@ export const runtime = "edge"
 
 export async function POST(request: Request) {
   try {
+    const canManageUsers = await checkPermission(PERMISSIONS.PROMOTE_USER)
+
+    if (!canManageUsers) {
+      return Response.json({ error: "权限不足" }, { status: 403 })
+    }
+
     const json = await request.json()
     const { searchText } = json as { searchText: string }
 

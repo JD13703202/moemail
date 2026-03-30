@@ -2,10 +2,18 @@ import { NextResponse } from "next/server"
 import { register } from "@/lib/auth"
 import { authSchema, AuthSchema } from "@/lib/validation"
 import { verifyTurnstileToken } from "@/lib/turnstile"
+import { ALLOW_PUBLIC_REGISTRATION } from "@/config/auth"
 
 export const runtime = "edge"
 
 export async function POST(request: Request) {
+  if (!ALLOW_PUBLIC_REGISTRATION) {
+    return NextResponse.json(
+      { error: "注册已关闭" },
+      { status: 403 }
+    )
+  }
+
   try {
     const json = await request.json() as AuthSchema
     

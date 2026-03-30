@@ -37,39 +37,47 @@ export function PromotePanel() {
     [ROLES.CIVILIAN]: tCard("roles.CIVILIAN"),
   } as const
 
+  const findTargetUser = async () => {
+    const res = await fetch("/api/roles/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ searchText })
+    })
+    const data = await res.json() as {
+      user?: {
+        id: string
+        name?: string
+        username?: string
+        email: string
+        role?: string
+      }
+      error?: string
+    }
+
+    if (!res.ok) throw new Error(data.error || "未知错误")
+
+    if (!data.user) {
+      toast({
+        title: t("noUsers"),
+        description: t("searchPlaceholder"),
+        variant: "destructive"
+      })
+      return null
+    }
+
+    return data.user
+  }
+
   const handleAction = async () => {
     if (!searchText) return
 
     setLoading(true)
     try {
-      const res = await fetch("/api/roles/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ searchText })
-      })
-      const data = await res.json() as {
-        user?: {
-          id: string
-          name?: string
-          username?: string
-          email: string
-          role?: string
-        }
-        error?: string
-      }
+      const user = await findTargetUser()
 
-      if (!res.ok) throw new Error(data.error || "未知错误")
+      if (!user) return
 
-      if (!data.user) {
-        toast({
-          title: t("noUsers"),
-          description: t("searchPlaceholder"),
-          variant: "destructive"
-        })
-        return
-      }
-
-      if (data.user.role === targetRole) {
+      if (user.role === targetRole) {
         toast({
           title: t("updateSuccess"),
           description: t("updateSuccess"),
@@ -81,7 +89,7 @@ export function PromotePanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: data.user.id,
+          userId: user.id,
           roleName: targetRole
         })
       })
@@ -93,13 +101,56 @@ export function PromotePanel() {
 
       toast({
         title: t("updateSuccess"),
-        description: `${data.user.username || data.user.email} - ${roleNames[targetRole]}`,
+        description: `${user.username || user.email} - ${roleNames[targetRole]}`,
       })
       setSearchText("")
     } catch (error) {
       toast({
         title: t("updateFailed"),
         description: error instanceof Error ? error.message : t("updateFailed"),
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!searchText) return
+
+    setLoading(true)
+    try {
+      const user = await findTargetUser()
+
+      if (!user) return
+
+      const confirmed = window.confirm(
+        `${t("deleteConfirm")} ${user.username || user.email}?`
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      const deleteRes = await fetch(`/api/roles/users/${user.id}`, {
+        method: "DELETE",
+      })
+
+      const deleteData = await deleteRes.json() as { error?: string }
+
+      if (!deleteRes.ok) {
+        throw new Error(deleteData.error || t("deleteFailed"))
+      }
+
+      toast({
+        title: t("deleteSuccess"),
+        description: user.username || user.email,
+      })
+      setSearchText("")
+    } catch (error) {
+      toast({
+        title: t("deleteFailed"),
+        description: error instanceof Error ? error.message : t("deleteFailed"),
         variant: "destructive"
       })
     } finally {
@@ -152,17 +203,28 @@ export function PromotePanel() {
           </Select>
         </div>
 
-        <Button
-          onClick={handleAction}
-          disabled={loading || !searchText.trim()}
-          className="w-full"
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            `${t("promote")} ${roleNames[targetRole]}`
-          )}
-        </Button>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Button
+            onClick={handleAction}
+            disabled={loading || !searchText.trim()}
+            className="w-full"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              `${t("promote")} ${roleNames[targetRole]}`
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={loading || !searchText.trim()}
+            className="w-full"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t("delete")}
+          </Button>
+        </div>
       </div>
     </div>
   )

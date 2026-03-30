@@ -131,9 +131,13 @@
     "role": "Role",
     "actions": "Actions",
     "promote": "Set as",
+    "delete": "Delete User",
+    "deleteConfirm": "Delete this user?",
     "noUsers": "No users found",
     "loading": "Loading...",
     "updateSuccess": "User role updated successfully",
-    "updateFailed": "Failed to update user role"
+    "updateFailed": "Failed to update user role",
+    "deleteSuccess": "User deleted successfully",
+    "deleteFailed": "Failed to delete user"
   }
 }
