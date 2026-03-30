@@ -14,6 +14,7 @@ import { getUserId } from "./apiKey"
 import { verifyTurnstileToken } from "./turnstile"
 import { getRuntimeEnv } from "./runtime-env"
 import { hashPassword, comparePassword } from "./password"
+import { recordAuthDebugLog } from "./auth-debug"
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.EMPEROR]: "皇帝（网站所有者）",
@@ -101,6 +102,13 @@ export const {
   const googleClientSecret = getRuntimeEnv("AUTH_GOOGLE_SECRET")
   const authSecret = getRuntimeEnv("AUTH_SECRET")
 
+  if (!authSecret) {
+    void recordAuthDebugLog("error", "auth-secret-missing", {
+      githubConfigured: Boolean(githubClientId && githubClientSecret),
+      googleConfigured: Boolean(googleClientId && googleClientSecret),
+    })
+  }
+
   const providers: NonNullable<NextAuthConfig["providers"]> = [
     CredentialsProvider({
       name: "Credentials",
@@ -110,21 +118,35 @@ export const {
       },
       async authorize(credentials) {
         if (!credentials) {
+          void recordAuthDebugLog("error", "credentials-missing", {})
           throw new Error("请输入用户名和密码")
         }
 
         const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
+        void recordAuthDebugLog("debug", "credentials-authorize-start", {
+          username,
+          hasPassword: Boolean(password),
+          hasTurnstileToken: Boolean(turnstileToken),
+        })
 
         let parsedCredentials: AuthSchema
         try {
           parsedCredentials = authSchema.parse({ username, password, turnstileToken })
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
+          void recordAuthDebugLog("error", "credentials-parse-failed", {
+            username,
+            error,
+          })
           throw new Error("输入格式不正确")
         }
 
         const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
         if (!verification.success) {
+          void recordAuthDebugLog("error", "turnstile-verification-failed", {
+            username: parsedCredentials.username,
+            reason: verification.reason,
+          })
           if (verification.reason === "missing-token") {
             throw new Error("请先完成安全验证")
           }
@@ -138,13 +160,25 @@ export const {
         })
 
         if (!user) {
+          void recordAuthDebugLog("warn", "credentials-user-not-found", {
+            username: parsedCredentials.username,
+          })
           throw new Error("用户名或密码错误")
         }
 
         const isValid = await comparePassword(parsedCredentials.password, user.password as string)
         if (!isValid) {
+          void recordAuthDebugLog("warn", "credentials-password-mismatch", {
+            username: parsedCredentials.username,
+            userId: user.id,
+          })
           throw new Error("用户名或密码错误")
         }
+
+        void recordAuthDebugLog("debug", "credentials-authorize-success", {
+          username: parsedCredentials.username,
+          userId: user.id,
+        })
 
         return {
           ...user,
@@ -197,9 +231,21 @@ export const {
           const role = await findOrCreateRole(db, defaultRole)
           await assignRoleToUser(db, user.id, role.id)
         } catch (error) {
+          void recordAuthDebugLog("error", "assign-role-failed", {
+            userId: user.id,
+            error,
+          })
           console.error('Error assigning role:', error)
         }
       }
+    },
+    logger: {
+      error(error) {
+        void recordAuthDebugLog("error", "authjs-error", error)
+      },
+      warn(code) {
+        void recordAuthDebugLog("warn", "authjs-warning", { code })
+      },
     },
     callbacks: {
       async jwt({ token, user }) {

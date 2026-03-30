@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { useToast } from "@/components/ui/use-toast"
@@ -35,6 +35,7 @@ interface LoginFormProps {
     google: boolean
   }
   allowRegistration?: boolean
+  authDebug?: boolean
 }
 
 interface FormErrors {
@@ -43,7 +44,40 @@ interface FormErrors {
   confirmPassword?: string
 }
 
-export function LoginForm({ turnstile, oauthProviders, allowRegistration = true }: LoginFormProps) {
+interface DebugLogEntry {
+  at: string
+  event: string
+  level: "debug" | "warn" | "error"
+  details?: unknown
+}
+
+interface DebugSnapshot {
+  logs: DebugLogEntry[]
+  statuses: {
+    authSecretConfigured: boolean
+    githubConfigured: boolean
+    googleConfigured: boolean
+    turnstileEnabled: boolean
+    turnstileSiteKeyConfigured: boolean
+    allowRegistration: boolean
+  }
+}
+
+const DEBUG_STATUS_LABELS: Record<keyof DebugSnapshot["statuses"], string> = {
+  authSecretConfigured: "AUTH_SECRET",
+  githubConfigured: "GitHub OAuth",
+  googleConfigured: "Google OAuth",
+  turnstileEnabled: "Turnstile enabled",
+  turnstileSiteKeyConfigured: "Turnstile site key",
+  allowRegistration: "Public registration",
+}
+
+export function LoginForm({
+  turnstile,
+  oauthProviders,
+  allowRegistration = true,
+  authDebug = false,
+}: LoginFormProps) {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -52,6 +86,8 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
   const [turnstileToken, setTurnstileToken] = useState("")
   const [turnstileResetCounter, setTurnstileResetCounter] = useState(0)
   const [activeTab, setActiveTab] = useState<"login" | "register">("login")
+  const [debugSnapshot, setDebugSnapshot] = useState<DebugSnapshot | null>(null)
+  const [debugLoading, setDebugLoading] = useState(false)
   const { toast } = useToast()
   const t = useTranslations("auth.loginForm")
 
@@ -61,6 +97,44 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
   const hasGoogleProvider = Boolean(oauthProviders?.google)
   const hasOAuthProviders = hasGithubProvider || hasGoogleProvider
   const registrationEnabled = Boolean(allowRegistration)
+
+  const loadDebugSnapshot = useCallback(async () => {
+    if (!authDebug) {
+      return
+    }
+
+    setDebugLoading(true)
+    try {
+      const response = await fetch("/api/auth/debug", {
+        cache: "no-store",
+      })
+      const data = await response.json() as DebugSnapshot
+      setDebugSnapshot(data)
+    } catch (error) {
+      setDebugSnapshot({
+        logs: [{
+          at: new Date().toISOString(),
+          event: "debug-panel-fetch-failed",
+          level: "error",
+          details: error instanceof Error ? error.message : "Unknown error",
+        }],
+        statuses: {
+          authSecretConfigured: false,
+          githubConfigured: false,
+          googleConfigured: false,
+          turnstileEnabled,
+          turnstileSiteKeyConfigured: Boolean(turnstileSiteKey),
+          allowRegistration: registrationEnabled,
+        },
+      })
+    } finally {
+      setDebugLoading(false)
+    }
+  }, [authDebug, registrationEnabled, turnstileEnabled, turnstileSiteKey])
+
+  useEffect(() => {
+    void loadDebugSnapshot()
+  }, [loadDebugSnapshot])
 
   const resetTurnstile = useCallback(() => {
     setTurnstileToken("")
@@ -130,6 +204,7 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
       })
 
       if (result?.error) {
+        void loadDebugSnapshot()
         toast({
           title: t("toast.loginFailed"),
           description: result.error,
@@ -142,6 +217,7 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
 
       window.location.href = "/"
     } catch (error) {
+      void loadDebugSnapshot()
       toast({
         title: t("toast.loginFailed"),
         description: error instanceof Error ? error.message : t("toast.registerFailedDesc"),
@@ -167,6 +243,7 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
       const data = await response.json() as { error?: string }
 
       if (!response.ok) {
+        void loadDebugSnapshot()
         toast({
           title: t("toast.registerFailed"),
           description: data.error || t("toast.registerFailedDesc"),
@@ -186,6 +263,7 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
       })
 
       if (result?.error) {
+        void loadDebugSnapshot()
         toast({
           title: t("toast.loginFailed"),
           description: result.error || t("toast.autoLoginFailed"),
@@ -198,6 +276,7 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
 
       window.location.href = "/"
     } catch (error) {
+      void loadDebugSnapshot()
       toast({
         title: t("toast.registerFailed"),
         description: error instanceof Error ? error.message : t("toast.registerFailedDesc"),
@@ -449,6 +528,42 @@ export function LoginForm({ turnstile, oauthProviders, allowRegistration = true 
               onExpire={resetTurnstile}
               resetSignal={turnstileResetCounter}
             />
+          </div>
+        )}
+        {authDebug && (
+          <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-50/80 p-3 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/30 dark:text-amber-100">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="font-semibold">Auth Debug Panel</div>
+                <div className="text-[11px] opacity-80">Open only when troubleshooting. Refresh after a failed login to inspect the latest server logs.</div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadDebugSnapshot()}
+                disabled={debugLoading}
+              >
+                {debugLoading ? "Loading..." : "Refresh"}
+              </Button>
+            </div>
+
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              {Object.entries(debugSnapshot?.statuses ?? {}).map(([key, value]) => (
+                <div key={key} className="rounded border border-amber-600/20 bg-background/70 px-2 py-1">
+                  <div className="font-medium">{DEBUG_STATUS_LABELS[key as keyof DebugSnapshot["statuses"]]}</div>
+                  <div className={cn("mt-1", value ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+                    {value ? "configured" : "missing"}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <pre className="max-h-72 overflow-auto rounded border border-amber-600/20 bg-background/70 p-2 text-[11px] leading-5">
+              {debugSnapshot
+                ? JSON.stringify(debugSnapshot.logs, null, 2)
+                : "No debug data loaded yet."}
+            </pre>
           </div>
         )}
       </CardContent>

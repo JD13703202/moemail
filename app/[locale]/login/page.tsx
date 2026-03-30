@@ -10,12 +10,16 @@ export const runtime = "edge"
 
 export default async function LoginPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>
+  searchParams: Promise<{ debug?: string }>
 }) {
   const { locale: localeFromParams } = await params
+  const { debug } = await searchParams
   const locale = localeFromParams as Locale
   const session = await auth()
+  const authDebug = debug === "1"
   
   if (session?.user) {
     redirect(`/${locale}`)
@@ -33,6 +37,7 @@ export default async function LoginPage({
         turnstile={{ enabled: turnstile.enabled, siteKey: turnstile.siteKey }}
         oauthProviders={oauthProviders}
         allowRegistration={ALLOW_PUBLIC_REGISTRATION}
+        authDebug={authDebug}
       />
     </div>
   )
