@@ -167,6 +167,23 @@ cp .env.example .env
 pnpm dlx tsx ./scripts/deploy/index.ts
 ```
 
+### Cloudflare Dashboard Deployment
+
+If you deploy from the Cloudflare dashboard or build system, do not use `npx wrangler deploy`.
+This repository targets Cloudflare Pages with `@cloudflare/next-on-pages`, so the correct commands are:
+
+```bash
+# Build command
+pnpm run build:pages
+
+# Deploy command
+pnpm run deploy:pages
+```
+
+`pnpm run deploy:pages` will deploy with `wrangler pages deploy`.
+If `wrangler.json` is missing, it will fall back to `wrangler.example.json` when possible.
+If you rely on example bindings, set `DATABASE_ID`, `KV_NAMESPACE_ID`, and optionally `PROJECT_NAME` in the Cloudflare build environment, or configure the bindings directly in the Pages dashboard.
+
 ### Github Actions Deployment
 
 This project supports automated deployment using GitHub Actions. It supports the following triggers:

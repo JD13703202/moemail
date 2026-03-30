@@ -166,6 +166,23 @@ cp .env.example .env
 pnpm dlx tsx ./scripts/deploy/index.ts
 ```
 
+### Cloudflare Dashboard 部署
+
+如果你是通过 Cloudflare Dashboard 或它的构建系统部署，不要使用 `npx wrangler deploy`。
+这个仓库走的是 Cloudflare Pages + `@cloudflare/next-on-pages` 路线，正确命令应为：
+
+```bash
+# Build command
+pnpm run build:pages
+
+# Deploy command
+pnpm run deploy:pages
+```
+
+`pnpm run deploy:pages` 内部会使用 `wrangler pages deploy`。
+如果仓库里没有 `wrangler.json`，脚本会在可能的情况下回退到 `wrangler.example.json`。
+如果你依赖示例配置里的绑定，请在 Cloudflare 构建环境中设置 `DATABASE_ID`、`KV_NAMESPACE_ID`，以及可选的 `PROJECT_NAME`，或者直接在 Pages 控制台中配置这些绑定。
+
 ### Github Actions 部署
 
 本项目可使用 GitHub Actions 实现自动化部署。支持以下触发方式：
