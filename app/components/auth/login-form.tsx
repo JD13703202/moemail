@@ -72,6 +72,30 @@ const DEBUG_STATUS_LABELS: Record<keyof DebugSnapshot["statuses"], string> = {
   allowRegistration: "Public registration",
 }
 
+function getSignInErrorMessage(
+  error: string | undefined,
+  code: string | undefined,
+  t: ReturnType<typeof useTranslations<"auth.loginForm">>
+) {
+  if (error !== "CredentialsSignin") {
+    return error || t("toast.loginFailedDesc")
+  }
+
+  if (code === "turnstile-required") {
+    return t("toast.turnstileRequiredDesc")
+  }
+
+  if (code === "turnstile-failed") {
+    return t("toast.turnstileFailedDesc")
+  }
+
+  if (code === "invalid-input") {
+    return t("toast.invalidInputDesc")
+  }
+
+  return t("toast.loginFailedDesc")
+}
+
 export function LoginForm({
   turnstile,
   oauthProviders,
@@ -207,7 +231,7 @@ export function LoginForm({
         void loadDebugSnapshot()
         toast({
           title: t("toast.loginFailed"),
-          description: result.error,
+          description: getSignInErrorMessage(result.error, result.code, t),
           variant: "destructive",
         })
         setLoading(false)
@@ -266,7 +290,7 @@ export function LoginForm({
         void loadDebugSnapshot()
         toast({
           title: t("toast.loginFailed"),
-          description: result.error || t("toast.autoLoginFailed"),
+          description: getSignInErrorMessage(result.error, result.code, t) || t("toast.autoLoginFailed"),
           variant: "destructive",
         })
         setLoading(false)

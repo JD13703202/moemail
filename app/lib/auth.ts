@@ -1,4 +1,4 @@
-import NextAuth, { type NextAuthConfig } from "next-auth"
+import NextAuth, { CredentialsSignin, type NextAuthConfig } from "next-auth"
 import GitHub from "next-auth/providers/github"
 import Google from "next-auth/providers/google"
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
@@ -21,6 +21,13 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.DUKE]: "公爵（超级用户）",
   [ROLES.KNIGHT]: "骑士（高级用户）",
   [ROLES.CIVILIAN]: "平民（普通用户）",
+}
+
+class CredentialsFlowError extends CredentialsSignin {
+  constructor(code: string) {
+    super()
+    this.code = code
+  }
 }
 
 const getDefaultRole = async (): Promise<Role> => {
@@ -119,7 +126,7 @@ export const {
       async authorize(credentials) {
         if (!credentials) {
           void recordAuthDebugLog("error", "credentials-missing", {})
-          throw new Error("请输入用户名和密码")
+          throw new CredentialsFlowError("invalid-input")
         }
 
         const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
@@ -138,7 +145,7 @@ export const {
             username,
             error,
           })
-          throw new Error("输入格式不正确")
+          throw new CredentialsFlowError("invalid-input")
         }
 
         const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
@@ -148,9 +155,9 @@ export const {
             reason: verification.reason,
           })
           if (verification.reason === "missing-token") {
-            throw new Error("请先完成安全验证")
+            throw new CredentialsFlowError("turnstile-required")
           }
-          throw new Error("安全验证未通过")
+          throw new CredentialsFlowError("turnstile-failed")
         }
 
         const db = createDb()
@@ -163,7 +170,7 @@ export const {
           void recordAuthDebugLog("warn", "credentials-user-not-found", {
             username: parsedCredentials.username,
           })
-          throw new Error("用户名或密码错误")
+          return null
         }
 
         const isValid = await comparePassword(parsedCredentials.password, user.password as string)
@@ -172,7 +179,7 @@ export const {
             username: parsedCredentials.username,
             userId: user.id,
           })
-          throw new Error("用户名或密码错误")
+          return null
         }
 
         void recordAuthDebugLog("debug", "credentials-authorize-success", {
