@@ -13,6 +13,7 @@ import { authSchema, AuthSchema } from "@/lib/validation"
 import { generateAvatarUrl } from "./avatar"
 import { getUserId } from "./apiKey"
 import { verifyTurnstileToken } from "./turnstile"
+import { getRuntimeEnv } from "./runtime-env"
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.EMPEROR]: "皇帝（网站所有者）",
@@ -94,6 +95,12 @@ export const {
   signIn,
   signOut
 } = NextAuth(() => {
+  const githubClientId = getRuntimeEnv("AUTH_GITHUB_ID")
+  const githubClientSecret = getRuntimeEnv("AUTH_GITHUB_SECRET")
+  const googleClientId = getRuntimeEnv("AUTH_GOOGLE_ID")
+  const googleClientSecret = getRuntimeEnv("AUTH_GOOGLE_SECRET")
+  const authSecret = getRuntimeEnv("AUTH_SECRET")
+
   const providers: NonNullable<NextAuthConfig["providers"]> = [
     CredentialsProvider({
       name: "Credentials",
@@ -147,28 +154,28 @@ export const {
     }),
   ]
 
-  if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
+  if (githubClientId && githubClientSecret) {
     providers.unshift(
       GitHub({
-        clientId: process.env.AUTH_GITHUB_ID,
-        clientSecret: process.env.AUTH_GITHUB_SECRET,
+        clientId: githubClientId,
+        clientSecret: githubClientSecret,
         allowDangerousEmailAccountLinking: true,
       })
     )
   }
 
-  if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+  if (googleClientId && googleClientSecret) {
     providers.unshift(
       Google({
-        clientId: process.env.AUTH_GOOGLE_ID,
-        clientSecret: process.env.AUTH_GOOGLE_SECRET,
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
         allowDangerousEmailAccountLinking: true,
       })
     )
   }
 
   return {
-    secret: process.env.AUTH_SECRET,
+    secret: authSecret,
     adapter: DrizzleAdapter(createDb(), {
       usersTable: users,
       accountsTable: accounts,

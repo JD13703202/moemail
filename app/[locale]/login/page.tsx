@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import type { Locale } from "@/i18n/config"
 import { getTurnstileConfig } from "@/lib/turnstile"
 import { ALLOW_PUBLIC_REGISTRATION } from "@/config/auth"
+import { getRuntimeEnv } from "@/lib/runtime-env"
 
 export const runtime = "edge"
 
@@ -22,8 +23,8 @@ export default async function LoginPage({
 
   const turnstile = await getTurnstileConfig()
   const oauthProviders = {
-    github: Boolean(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET),
-    google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+    github: Boolean(getRuntimeEnv("AUTH_GITHUB_ID") && getRuntimeEnv("AUTH_GITHUB_SECRET")),
+    google: Boolean(getRuntimeEnv("AUTH_GOOGLE_ID") && getRuntimeEnv("AUTH_GOOGLE_SECRET")),
   }
 
   return (
