@@ -93,23 +93,8 @@ export const {
   auth,
   signIn,
   signOut
-} = NextAuth(() => ({
-  secret: process.env.AUTH_SECRET,
-  adapter: DrizzleAdapter(createDb(), {
-    usersTable: users,
-    accountsTable: accounts,
-  }),
-  providers: [
-    GitHub({
-      clientId: process.env.AUTH_GITHUB_ID,
-      clientSecret: process.env.AUTH_GITHUB_SECRET,
-      allowDangerousEmailAccountLinking: true,
-    }),
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: true,
-    }),
+} = NextAuth(() => {
+  const providers = [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -160,80 +145,110 @@ export const {
         }
       },
     }),
-  ],
-  events: {
-    async signIn({ user }) {
-      if (!user.id) return
+  ]
 
-      try {
-        const db = createDb()
-        const existingRole = await db.query.userRoles.findFirst({
-          where: eq(userRoles.userId, user.id),
-        })
+  if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
+    providers.unshift(
+      GitHub({
+        clientId: process.env.AUTH_GITHUB_ID,
+        clientSecret: process.env.AUTH_GITHUB_SECRET,
+        allowDangerousEmailAccountLinking: true,
+      })
+    )
+  }
 
-        if (existingRole) return
+  if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+    providers.unshift(
+      Google({
+        clientId: process.env.AUTH_GOOGLE_ID,
+        clientSecret: process.env.AUTH_GOOGLE_SECRET,
+        allowDangerousEmailAccountLinking: true,
+      })
+    )
+  }
 
-        const defaultRole = await getDefaultRole()
-        const role = await findOrCreateRole(db, defaultRole)
-        await assignRoleToUser(db, user.id, role.id)
-      } catch (error) {
-        console.error('Error assigning role:', error)
-      }
-    },
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.name = user.name || user.username
-        token.username = user.username
-        token.image = user.image || generateAvatarUrl(token.name as string)
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.name = token.name as string
-        session.user.username = token.username as string
-        session.user.image = token.image as string
+  return {
+    secret: process.env.AUTH_SECRET,
+    adapter: DrizzleAdapter(createDb(), {
+      usersTable: users,
+      accountsTable: accounts,
+    }),
+    providers,
+    events: {
+      async signIn({ user }) {
+        if (!user.id) return
 
-        const db = createDb()
-        let userRoleRecords = await db.query.userRoles.findMany({
-          where: eq(userRoles.userId, session.user.id),
-          with: { role: true },
-        })
+        try {
+          const db = createDb()
+          const existingRole = await db.query.userRoles.findFirst({
+            where: eq(userRoles.userId, user.id),
+          })
 
-        if (!userRoleRecords.length) {
+          if (existingRole) return
+
           const defaultRole = await getDefaultRole()
           const role = await findOrCreateRole(db, defaultRole)
-          await assignRoleToUser(db, session.user.id, role.id)
-          userRoleRecords = [{
-            userId: session.user.id,
-            roleId: role.id,
-            createdAt: new Date(),
-            role: role
-          }]
+          await assignRoleToUser(db, user.id, role.id)
+        } catch (error) {
+          console.error('Error assigning role:', error)
+        }
+      }
+    },
+    },
+    callbacks: {
+      async jwt({ token, user }) {
+        if (user) {
+          token.id = user.id
+          token.name = user.name || user.username
+          token.username = user.username
+          token.image = user.image || generateAvatarUrl(token.name as string)
+        }
+        return token
+      },
+      async session({ session, token }) {
+        if (token && session.user) {
+          session.user.id = token.id as string
+          session.user.name = token.name as string
+          session.user.username = token.username as string
+          session.user.image = token.image as string
+
+          const db = createDb()
+          let userRoleRecords = await db.query.userRoles.findMany({
+            where: eq(userRoles.userId, session.user.id),
+            with: { role: true },
+          })
+
+          if (!userRoleRecords.length) {
+            const defaultRole = await getDefaultRole()
+            const role = await findOrCreateRole(db, defaultRole)
+            await assignRoleToUser(db, session.user.id, role.id)
+            userRoleRecords = [{
+              userId: session.user.id,
+              roleId: role.id,
+              createdAt: new Date(),
+              role: role
+            }]
+          }
+
+          session.user.roles = userRoleRecords.map(ur => ({
+            name: ur.role.name,
+          }))
+
+          const userAccounts = await db.query.accounts.findMany({
+            where: eq(accounts.userId, session.user.id),
+          })
+
+          session.user.providers = userAccounts.map(account => account.provider)
         }
 
-        session.user.roles = userRoleRecords.map(ur => ({
-          name: ur.role.name,
-        }))
-
-        const userAccounts = await db.query.accounts.findMany({
-          where: eq(accounts.userId, session.user.id),
-        })
-
-        session.user.providers = userAccounts.map(account => account.provider)
-      }
-
-      return session
+        return session
+      },
     },
-  },
-  session: {
-    strategy: "jwt",
-  },
-}))
+    session: {
+      strategy: "jwt",
+    },
+  }
+})
 
 export async function register(username: string, password: string) {
   const db = createDb()
