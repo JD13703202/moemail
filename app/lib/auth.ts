@@ -147,6 +147,9 @@ export const {
           })
           throw new CredentialsFlowError("invalid-input")
         }
+        void recordAuthDebugLog("debug", "credentials-parse-success", {
+          username: parsedCredentials.username,
+        })
 
         const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
         if (!verification.success) {
@@ -159,12 +162,27 @@ export const {
           }
           throw new CredentialsFlowError("turnstile-failed")
         }
+        void recordAuthDebugLog("debug", "turnstile-verification-success", {
+          username: parsedCredentials.username,
+        })
 
         const db = createDb()
-
-        const user = await db.query.users.findFirst({
-          where: eq(users.username, parsedCredentials.username),
+        void recordAuthDebugLog("debug", "credentials-db-query-start", {
+          username: parsedCredentials.username,
         })
+
+        let user
+        try {
+          user = await db.query.users.findFirst({
+            where: eq(users.username, parsedCredentials.username),
+          })
+        } catch (error) {
+          void recordAuthDebugLog("error", "credentials-db-query-failed", {
+            username: parsedCredentials.username,
+            error,
+          })
+          throw error
+        }
 
         if (!user) {
           void recordAuthDebugLog("warn", "credentials-user-not-found", {
@@ -172,8 +190,31 @@ export const {
           })
           return null
         }
+        void recordAuthDebugLog("debug", "credentials-user-loaded", {
+          username: parsedCredentials.username,
+          userId: user.id,
+          hasPasswordHash: Boolean(user.password),
+        })
 
-        const isValid = await comparePassword(parsedCredentials.password, user.password as string)
+        if (!user.password) {
+          void recordAuthDebugLog("error", "credentials-password-missing", {
+            username: parsedCredentials.username,
+            userId: user.id,
+          })
+          return null
+        }
+
+        let isValid = false
+        try {
+          isValid = await comparePassword(parsedCredentials.password, user.password)
+        } catch (error) {
+          void recordAuthDebugLog("error", "credentials-password-compare-failed", {
+            username: parsedCredentials.username,
+            userId: user.id,
+            error,
+          })
+          throw error
+        }
         if (!isValid) {
           void recordAuthDebugLog("warn", "credentials-password-mismatch", {
             username: parsedCredentials.username,

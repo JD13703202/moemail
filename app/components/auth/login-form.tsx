@@ -72,6 +72,18 @@ const DEBUG_STATUS_LABELS: Record<keyof DebugSnapshot["statuses"], string> = {
   allowRegistration: "Public registration",
 }
 
+function getDebugStatusText(key: keyof DebugSnapshot["statuses"], value: boolean) {
+  if (key === "allowRegistration") {
+    return value ? "enabled" : "disabled"
+  }
+
+  if (key === "turnstileEnabled") {
+    return value ? "enabled" : "disabled"
+  }
+
+  return value ? "configured" : "missing"
+}
+
 function getSignInErrorMessage(
   error: string | undefined,
   code: string | undefined,
@@ -574,10 +586,10 @@ export function LoginForm({
 
             <div className="mb-3 grid grid-cols-2 gap-2">
               {Object.entries(debugSnapshot?.statuses ?? {}).map(([key, value]) => (
-                <div key={key} className="rounded border border-amber-600/20 bg-background/70 px-2 py-1">
+                  <div key={key} className="rounded border border-amber-600/20 bg-background/70 px-2 py-1">
                   <div className="font-medium">{DEBUG_STATUS_LABELS[key as keyof DebugSnapshot["statuses"]]}</div>
                   <div className={cn("mt-1", value ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                    {value ? "configured" : "missing"}
+                    {getDebugStatusText(key as keyof DebugSnapshot["statuses"], value)}
                   </div>
                 </div>
               ))}
