@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth, { type NextAuthConfig } from "next-auth"
 import GitHub from "next-auth/providers/github"
 import Google from "next-auth/providers/google"
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
@@ -94,7 +94,7 @@ export const {
   signIn,
   signOut
 } = NextAuth(() => {
-  const providers = [
+  const providers: NonNullable<NextAuthConfig["providers"]> = [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
