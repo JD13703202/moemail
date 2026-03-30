@@ -194,7 +194,6 @@ export const {
         }
       }
     },
-    },
     callbacks: {
       async jwt({ token, user }) {
         if (user) {
